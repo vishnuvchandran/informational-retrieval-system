@@ -1,0 +1,14 @@
+numpy
+pandas
+scipy
+hnswlib
+psycopg2-binary
+streamlit
+langchain
+langchain-community
+chromadb
+pypdf
+google-generativeai
+langchain_google_genai
+langchain_openai
+langchain_chroma

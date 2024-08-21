@@ -1,0 +1,56 @@
+version: '3.8'
+
+networks:
+  rag:
+
+services:
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - chroma
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@db:5432/ragdb
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    networks:
+      - rag  
+
+  db:
+    image: postgres:13
+    container_name: rag-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - rag
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    volumes:
+      - ./chroma_db:/chroma/chromas
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: rag-pgadmin
+    ports:
+      - 5050:80
+    depends_on:  
+      - db
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+    networks:
+      - rag
+
+volumes:
+  postgres_data:
+  chroma_db:
