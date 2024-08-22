@@ -28,7 +28,7 @@ def set_api_key(model_choice):
 def get_llm(model_choice):
     set_api_key(model_choice)
     if model_choice == "google":
-        return GoogleGenerativeAI(model="gemini-pro")
+        return GoogleGenerativeAI(model="gemini-pro", temperature=0.1)
     elif model_choice == "openai":
         return ChatOpenAI(model="gpt-3.5-turbo-0125")
     
