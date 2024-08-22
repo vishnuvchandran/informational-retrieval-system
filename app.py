@@ -3,13 +3,15 @@ from utils.document_loader import load_document_from_uploadedfile
 from utils.text_splitter import split_text
 from utils.embeddings import get_embeddings
 from utils.vector_store import store_vectors
-from utils.query_processing import process_query
+from utils.query_processing import process_query, process_db_query
 from utils.database import store_chunks, fetch_chunks
 from langchain.chains import RetrievalQA
 
 
 def main():
     st.set_page_config(layout="wide")
+
+    fetch_db = st.sidebar.checkbox('Fetch data from database')
 
     # Model selection dropdown
     model_choice = st.sidebar.selectbox(
@@ -52,7 +54,10 @@ def main():
 
         # Process the query and generate response
         with st.spinner("Generating response..."):
-            response = process_query(prompt, model_choice)
+            if fetch_db:
+                response = process_db_query(prompt, model_choice)
+            else:
+                response = process_query(prompt, model_choice)
             
         # Display assistant response in chat message container
         with st.chat_message("assistant"):

@@ -1,6 +1,6 @@
 from utils.embeddings import get_query_embedding
 from utils.vector_store import search_vectors
-from utils.database import fetch_chunks
+from utils.database import fetch_chunks, connect_db
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -12,7 +12,11 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain.chains import create_sql_query_chain
+from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
+from operator import itemgetter
 import streamlit as st
+
 
 ### Statefully manage chat history ###
 store = {}
@@ -85,4 +89,42 @@ def process_query(query: str, model_choice):
         config={"configurable": {"session_id": "ragconv"}},
     )["answer"]
 
+    return response
+
+
+def process_db_query(query: str, model_choice):
+    llm = get_llm(model_choice)
+    db = connect_db()
+    execute_query = QuerySQLDataBaseTool(db=db)
+    write_query = create_sql_query_chain(llm, db)
+
+    # answer_prompt = PromptTemplate.from_template(
+    #     """Given the following user question, corresponding PostgreSQL query, and PostgreSQL query result, answer the user question. If the query has a syntax error, provide the corrected query as well.
+
+    #     Question: {question}
+    #     PostgreSQL Query: {query}
+    #     PostgreSQL Query Result: {result}
+    #     Answer: """
+    # )
+
+    answer_prompt = PromptTemplate.from_template(
+        """Given the following user question, corresponding PostgreSQL query, and PostgreSQL query result, answer the user question. If the query has a syntax error correct it. Do not include the syntax error and the query in the response.
+
+        Question: {question}
+        PostgreSQL Query: {query}
+        PostgreSQL Query Result: {result}
+        Answer: """
+    )
+
+
+    answer = answer_prompt | llm | StrOutputParser()
+
+    chain = (
+        RunnablePassthrough.assign(query=write_query).assign(
+            result=itemgetter("query") | execute_query
+        )
+        | answer
+    )
+
+    response = chain.invoke({"question": query})
     return response
