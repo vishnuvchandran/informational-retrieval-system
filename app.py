@@ -8,6 +8,7 @@ from utils.database import store_chunks, fetch_chunks
 from langchain.chains import RetrievalQA
 
 
+
 def main():
     st.set_page_config(layout="wide")
 

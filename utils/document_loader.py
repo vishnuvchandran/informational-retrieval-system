@@ -3,13 +3,14 @@ from typing import Union
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_core.documents import Document
 import tempfile
+from langchain_community.document_loaders import PDFPlumberLoader
 
 def load_document(file_path: Union[str, os.PathLike]) -> list[Document]:
     
     file_extension = os.path.splitext(file_path)[1].lower()
     
     if file_extension == '.pdf':
-        loader = PyPDFLoader(file_path)
+        loader = PDFPlumberLoader(file_path)
         return loader.load()
     elif file_extension == '.txt':
         loader = TextLoader(file_path)

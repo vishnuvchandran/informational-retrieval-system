@@ -26,7 +26,7 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
-def process_query(query: str, model_choice):
+def process_query_new(query: str, model_choice):
     query_vector = get_query_embedding(query, model_choice)
     similar_chunk_ids = search_vectors(query_vector, n_results=10)
     relevant_chunks = fetch_chunks(similar_chunk_ids)
@@ -34,6 +34,7 @@ def process_query(query: str, model_choice):
     embedding = get_embedding_model(model_choice)
     vectorstore = Chroma.from_documents(documents=relevant_chunks, embedding=embedding)
     retriever = vectorstore.as_retriever()
+
     # Prepare the context by joining the relevant chunks
     context = "\n\n".join([chunk.page_content for chunk in relevant_chunks])
     llm = get_llm(model_choice)
@@ -57,12 +58,29 @@ def process_query(query: str, model_choice):
     )
 
     ### Answer question ###
-    qa_system_prompt = """You are an assistant for question-answering tasks. \
-    Use the following pieces of retrieved context to answer the question. \
-    If you don't know the answer, just say that you don't know. \
-    Use three sentences maximum and keep the answer concise.\
+    # qa_system_prompt = """You are an assistant for question-answering tasks. \
+    # Use the following pieces of retrieved context to answer the question. \
+    # If you don't know the answer, just say that you don't know. \
+    # Use three sentences maximum and keep the answer concise.\
+
+    # {context}"""
+
+
+    qa_system_prompt = """You are an advanced assistant for question-answering tasks. Your goal is to provide accurate, comprehensive, and helpful responses based on the given context.
+
+    Instructions:
+    1. Carefully analyze all pieces of retrieved context provided below.
+    2. Pay special attention to company names, abbreviations, and their full forms.
+    3. Extract and synthesize relevant information to form a coherent and relevant answer to the question.
+    4. If you find any information related to the question, even if it's not a complete answer, include it in your response.
+    5. If you're unsure about any part of your answer, express your level of confidence.
+    6. If you don't find any relevant information, clearly state that you don't have enough information to answer accurately.
+    7. Provide a thorough answer without unnecessary length. Adjust the response length based on the complexity of the question and the available information.
+    8. If appropriate, suggest follow-up questions or additional information that might be helpful.
+
 
     {context}"""
+
 
     qa_prompt = ChatPromptTemplate.from_messages(
         [
@@ -127,4 +145,44 @@ def process_db_query(query: str, model_choice):
     )
 
     response = chain.invoke({"question": query})
+    return response
+
+
+def process_query(query: str, model_choice):
+    
+    query_vector = get_query_embedding(query, model_choice)
+    similar_chunk_ids = search_vectors(query_vector, n_results=5)
+    relevant_chunks = fetch_chunks(similar_chunk_ids)
+    llm = get_llm(model_choice)
+    
+    # Prepare the context by joining the relevant chunks
+    context = "\n\n".join([chunk.page_content for chunk in relevant_chunks])
+    st.write(context)
+    template = """You are an advanced assistant for question-answering tasks. Your goal is to provide accurate, comprehensive, and helpful responses based on the given context.
+
+    Instructions:
+    1. Carefully analyze all pieces of retrieved context provided below.
+    2. Pay special attention to company names, abbreviations, and their full forms.
+    3. Extract and synthesize relevant information to form a coherent and relevant answer to the question.
+    4. If you find any information related to the question, even if it's not a complete answer, include it in your response.
+    5. If you're unsure about any part of your answer, express your level of confidence.
+    6. If you don't find any relevant information, clearly state that you don't have enough information to answer accurately.
+    7. Provide a thorough answer without unnecessary length. Adjust the response length based on the complexity of the question and the available information.
+    8. If appropriate, suggest follow-up questions or additional information that might be helpful.
+
+    {context}
+
+    Question: {question}
+
+    Helpful Answer:"""
+    custom_rag_prompt = PromptTemplate.from_template(template)
+
+    rag_chain = (
+        {"context": lambda q: context, "question": RunnablePassthrough()}
+        | custom_rag_prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    response = rag_chain.invoke(query)
     return response
