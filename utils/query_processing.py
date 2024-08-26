@@ -15,6 +15,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.chains import create_sql_query_chain
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from operator import itemgetter
+from langchain_community.agent_toolkits import create_sql_agent
 import streamlit as st
 
 
@@ -185,4 +186,14 @@ def process_query(query: str, model_choice):
     )
     
     response = rag_chain.invoke(query)
+    return response
+
+
+def process_db_agent(query: str, model_choice):
+    llm = get_llm(model_choice)
+    db = connect_db()
+    
+    agent_executor = create_sql_agent(llm, db=db, agent_type="openai-tools", verbose=True)
+
+    response = agent_executor.invoke(query)
     return response

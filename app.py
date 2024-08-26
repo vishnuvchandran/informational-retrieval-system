@@ -3,7 +3,7 @@ from utils.document_loader import load_document_from_uploadedfile
 from utils.text_splitter import split_text
 from utils.embeddings import get_embeddings
 from utils.vector_store import store_vectors
-from utils.query_processing import process_query, process_db_query
+from utils.query_processing import process_query, process_db_query, process_db_agent
 from utils.database import store_chunks, fetch_chunks
 from langchain.chains import RetrievalQA
 
@@ -56,7 +56,7 @@ def main():
         # Process the query and generate response
         with st.spinner("Generating response..."):
             if fetch_db:
-                response = process_db_query(prompt, model_choice)
+                response = process_db_agent(prompt, model_choice)
             else:
                 response = process_query(prompt, model_choice)
             
