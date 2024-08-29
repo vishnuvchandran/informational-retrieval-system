@@ -1,5 +1,5 @@
 from utils.embeddings import get_query_embedding
-from utils.vector_store import search_vectors
+from utils.vector_store import search_vectors, search_documents
 from utils.database import fetch_chunks, connect_db
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -16,7 +16,13 @@ from langchain.chains import create_sql_query_chain
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from operator import itemgetter
 from langchain_community.agent_toolkits import create_sql_agent
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_community.vectorstores import FAISS
+import ast
+import re
+from utils.external_db import EnhancedRAGSystem
 import streamlit as st
+
 
 
 ### Statefully manage chat history ###
@@ -27,7 +33,7 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
-def process_query_new(query: str, model_choice):
+def process_query_history(query: str, model_choice):
     query_vector = get_query_embedding(query, model_choice)
     similar_chunk_ids = search_vectors(query_vector, n_results=10)
     relevant_chunks = fetch_chunks(similar_chunk_ids)
@@ -154,11 +160,13 @@ def process_query(query: str, model_choice):
     query_vector = get_query_embedding(query, model_choice)
     similar_chunk_ids = search_vectors(query_vector, n_results=5)
     relevant_chunks = fetch_chunks(similar_chunk_ids)
+    # relevant_chunks = search_documents(query_vector, query, n_results=5)
+    
     llm = get_llm(model_choice)
     
     # Prepare the context by joining the relevant chunks
     context = "\n\n".join([chunk.page_content for chunk in relevant_chunks])
-    st.write(context)
+    
     template = """You are an advanced assistant for question-answering tasks. Your goal is to provide accurate, comprehensive, and helpful responses based on the given context.
 
     Instructions:
@@ -192,8 +200,48 @@ def process_query(query: str, model_choice):
 def process_db_agent(query: str, model_choice):
     llm = get_llm(model_choice)
     db = connect_db()
-    
-    agent_executor = create_sql_agent(llm, db=db, agent_type="openai-tools", verbose=True)
+    embedding = get_embedding_model(model_choice)
 
-    response = agent_executor.invoke(query)
+    def query_as_list(db, query):
+        res = db.run(query)
+        res = [el for sub in ast.literal_eval(res) for el in sub if el]
+        res = [re.sub(r"\b\d+\b", "", string).strip() for string in res]
+        return res
+
+
+    proper_nouns = query_as_list(db, "SELECT Name FROM Artist")
+    proper_nouns += query_as_list(db, "SELECT Title FROM Album")
+    proper_nouns += query_as_list(db, "SELECT Name FROM Genre")
+    len(proper_nouns)
+    proper_nouns[:5]
+
+    vector_db = FAISS.from_texts(proper_nouns, embedding)
+    retriever = vector_db.as_retriever(search_kwargs={"k": 15})
+
+    system = """You are a SQLite expert. Given an input question, create a syntactically \
+    correct SQLite query to run. Unless otherwise specificed, do not return more than \
+    {top_k} rows.\n\nHere is the relevant table info: {table_info}\n\nHere is a non-exhaustive \
+    list of possible feature values. If filtering on a feature value make sure to check its spelling \
+    against this list first:\n\n{proper_nouns}"""
+
+    prompt = ChatPromptTemplate.from_messages([("system", system), ("human", "{input}")])
+
+    query_chain = create_sql_query_chain(llm, db, prompt=prompt)
+    retriever_chain = (
+        itemgetter("question")
+        | retriever
+        | (lambda docs: "\n".join(doc.page_content for doc in docs))
+    )
+    chain = RunnablePassthrough.assign(proper_nouns=retriever_chain) | query_chain
+
+    response = chain.invoke({"question": query})
+    return response
+
+
+def process_db_vector(query: str, model_choice):
+    db = connect_db()
+    llm = get_llm(model_choice)
+    rag_system = EnhancedRAGSystem(db, llm)
+    rag_system.initialize()
+    response = rag_system.process_query(query)
     return response

@@ -13,9 +13,11 @@ def store_vectors(chunks, vectors):
     
     ids = [str(uuid.uuid4()) for _ in chunks]
     metadatas = [{"source": chunk.metadata.get("source", ""), "page": chunk.metadata.get("page", 0)} for chunk in chunks]
+    documents = [chunk.page_content for chunk in chunks]
     
     collection.add(
         ids=ids,
+        documents=documents,
         embeddings=vectors,
         metadatas=metadatas
     )
@@ -28,3 +30,12 @@ def search_vectors(query_vector, n_results=10):
         n_results=n_results
     )
     return results['ids'][0]
+
+
+def search_documents(query_vector, query_document, n_results=10):
+    results = collection.query(
+        query_embeddings=[query_vector],
+        where_document=query_document,
+        n_results=n_results
+    )
+    return results['documents'][0]

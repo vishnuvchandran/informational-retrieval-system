@@ -13,3 +13,5 @@ google-generativeai
 langchain_google_genai
 langchain_openai
 langchain_chroma
+faiss-cpu
+sentence-transformers
