@@ -2,8 +2,12 @@ from langchain_google_genai import GoogleGenerativeAI
 import os
 from langchain_openai import ChatOpenAI
 from langchain_community.embeddings.google_palm import GooglePalmEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
+from langchain.embeddings import VertexAIEmbeddings
+from langchain.embeddings.base import Embeddings
+from typing import List
 
 # Dictionary to map model choices to their corresponding API keys
 API_KEYS = {}
@@ -36,6 +40,26 @@ def get_llm(model_choice):
 def get_embedding_model(model_choice):
     set_api_key(model_choice)
     if model_choice == "google":
-        return GooglePalmEmbeddings()
+        return GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     elif model_choice == "openai":
         return OpenAIEmbeddings()
+    
+
+class MyVertexAIEmbeddings(VertexAIEmbeddings, Embeddings):
+    model_name = 'textembedding-gecko'
+    max_batch_size = 5
+    
+    def embed_segments(self, segments: List) -> List:
+        embeddings = []
+        for i in tqdm(range(0, len(segments), self.max_batch_size)):
+            batch = segments[i: i+self.max_batch_size]
+            embeddings.extend(self.client.get_embeddings(batch))
+        return [embedding.values for embedding in embeddings]
+    
+    def embed_query(self, query: str) -> List:
+        embeddings = self.client.get_embeddings([query])
+        return embeddings[0].values
+    
+
+def get_vertex_embedding():
+    return  MyVertexAIEmbeddings()

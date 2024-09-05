@@ -1,5 +1,5 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 import faiss
 from langchain.tools import QuerySQLDataBaseTool
 from langchain.prompts import PromptTemplate

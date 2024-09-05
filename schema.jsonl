@@ -1,0 +1,12 @@
+{"table_name": "album", "columns": ["albumid", "title"]}
+{"table_name": "artist", "columns": ["artistid"]}
+{"table_name": "customer", "columns": ["customerid", "firstname", "lastname", "company", "address", "city", "state", "country", "postalcode", "phone", "fax", "email"]}
+{"table_name": "document_chunks", "columns": ["id", "content"]}
+{"table_name": "employee", "columns": ["employeeid", "lastname", "firstname", "title", "reportsto", "birthdate", "hiredate", "address", "city", "state", "country", "postalcode", "phone", "fax"]}
+{"table_name": "genre", "columns": ["genreid"]}
+{"table_name": "invoice", "columns": ["invoiceid", "customerid", "invoicedate", "billingaddress", "billingcity", "billingstate", "billingcountry", "billingpostalcode"]}
+{"table_name": "invoiceline", "columns": ["invoicelineid", "invoiceid", "trackid", "unitprice"]}
+{"table_name": "mediatype", "columns": ["mediatypeid"]}
+{"table_name": "playlist", "columns": ["playlistid"]}
+{"table_name": "playlisttrack", "columns": ["playlistid"]}
+{"table_name": "track", "columns": ["trackid", "name", "albumid", "mediatypeid", "genreid", "composer", "milliseconds", "bytes"]}

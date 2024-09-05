@@ -13,11 +13,11 @@ def store_vectors(chunks, vectors):
     
     ids = [str(uuid.uuid4()) for _ in chunks]
     metadatas = [{"source": chunk.metadata.get("source", ""), "page": chunk.metadata.get("page", 0)} for chunk in chunks]
-    documents = [chunk.page_content for chunk in chunks]
+    # documents = [chunk.page_content for chunk in chunks]
     
     collection.add(
         ids=ids,
-        documents=documents,
+        # documents=documents,
         embeddings=vectors,
         metadatas=metadatas
     )

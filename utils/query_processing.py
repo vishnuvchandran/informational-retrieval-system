@@ -4,7 +4,7 @@ from utils.database import fetch_chunks, connect_db
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from utils.llm_selection import get_llm, get_embedding_model
+from utils.llm_selection import get_llm, get_embedding_model, get_vertex_embedding
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -21,7 +21,12 @@ from langchain_community.vectorstores import FAISS
 import ast
 import re
 from utils.external_db import EnhancedRAGSystem
+from langchain.document_loaders import JSONLoader
+from langchain.prompts.chat import SystemMessagePromptTemplate
+from langchain.prompts.chat import HumanMessagePromptTemplate
+import json
 import streamlit as st
+import os
 
 
 
@@ -122,7 +127,7 @@ def process_db_query(query: str, model_choice):
     db = connect_db()
     execute_query = QuerySQLDataBaseTool(db=db)
     write_query = create_sql_query_chain(llm, db)
-
+    
     # answer_prompt = PromptTemplate.from_template(
     #     """Given the following user question, corresponding PostgreSQL query, and PostgreSQL query result, answer the user question. If the query has a syntax error, provide the corrected query as well.
 
@@ -245,3 +250,101 @@ def process_db_vector(query: str, model_choice):
     rag_system.initialize()
     response = rag_system.process_query(query)
     return response
+
+
+def process_text_to_sql(query: str):
+    # embedding = get_vertex_embedding()
+    embedding = get_embedding_model('google')
+    llm = get_llm('google')
+    pgdb = connect_db()
+    documents = JSONLoader(file_path='./schemanew.jsonl', jq_schema='.', text_content=False, json_lines=True).load()
+    db = FAISS.from_documents(documents=documents, embedding=embedding)
+    
+    retriever = db.as_retriever(search_type='mmr', search_kwargs={'k': 5, 'lambda_mult': 1})
+    matched_documents = retriever.get_relevant_documents(query=query)
+
+    matched_tables = []
+
+    for document in matched_documents:
+        page_content = document.page_content
+        page_content = json.loads(page_content)
+        table_name = page_content['table_name']
+        matched_tables.append(f'{table_name}')
+
+    search_kwargs = {
+        'k': 20
+    }
+    
+    retriever = db.as_retriever(search_type='similarity', search_kwargs=search_kwargs)
+    matched_columns = retriever.get_relevant_documents(query=query)
+
+    matched_columns_filtered = []
+
+    for i, column in enumerate(matched_columns):
+        page_content = json.loads(column.page_content)
+        matched_columns_filtered.append(page_content)
+    
+    matched_columns_cleaned = []
+    
+    for table in matched_columns_filtered:
+        table_name = table['table_name']
+        for column in table['columns']:
+            column_name = column['name']
+            data_type = column['type']
+            matched_columns_cleaned.append(f'table_name={table_name}|column_name={column_name}|data_type={data_type}')
+    
+    matched_columns_cleaned = '\n'.join(matched_columns_cleaned)
+
+    messages = []
+
+    template = "You are a SQL master expert capable of writing complex SQL queries in PostgreSQL."
+    system_message_prompt = SystemMessagePromptTemplate.from_template(template)
+    messages.append(system_message_prompt)
+
+    human_template = """Given the following inputs:
+    USER_QUERY:
+    --
+    {query}
+    --
+    MATCHED_SCHEMA: 
+    --
+    {matched_schema}
+    --
+    Please construct a SQL query using the MATCHED_SCHEMA and the USER_QUERY provided above.
+
+    IMPORTANT: Use ONLY the column names (column_name) mentioned in MATCHED_SCHEMA. DO NOT USE any other column names outside of this. 
+    IMPORTANT: Associate column_name mentioned in MATCHED_SCHEMA only to the table_name specified under MATCHED_SCHEMA.
+    NOTE: Use SQL 'AS' statement to assign a new name temporarily to a table column or even a table wherever needed. 
+    """
+
+    human_message = HumanMessagePromptTemplate.from_template(human_template)
+    messages.append(human_message)
+
+    chat_prompt = ChatPromptTemplate.from_messages(messages)
+
+    request = chat_prompt.format_prompt(query=query, matched_schema=matched_columns_cleaned).to_messages()
+    
+    response = llm.invoke(request)
+    sql_query = '\n'.join(response.strip().split('\n')[1:-1])
+
+    result = pgdb.run(sql_query)
+
+    final_template = """
+    Here is the result of your query:
+
+    User Query:
+    {user_query}
+
+    Generated SQL Query:
+    {sql_query}
+
+    Query Result:
+    {result}
+    """
+
+    final_response = llm.invoke(
+        final_template.format(user_query=query, sql_query=sql_query, result=result)
+    )
+    
+    st.write(response)
+    return final_response

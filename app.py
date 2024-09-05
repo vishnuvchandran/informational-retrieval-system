@@ -3,7 +3,7 @@ from utils.document_loader import load_document_from_uploadedfile
 from utils.text_splitter import split_text
 from utils.embeddings import get_embeddings
 from utils.vector_store import store_vectors
-from utils.query_processing import process_query, process_db_query, process_db_agent, process_db_vector, process_query_history
+from utils.query_processing import process_query, process_db_query, process_db_agent, process_db_vector, process_query_history, process_text_to_sql
 from utils.database import store_chunks, fetch_chunks
 from langchain.chains import RetrievalQA
 
@@ -15,7 +15,7 @@ def main():
     # Application type selection dropdown
     app_type = st.sidebar.selectbox(
         "Select the Application Behaviour:",
-        ("RAG", "RAG-conv-histry", "DB-QnA", "DB-QnA-agent", "DB-QnA-vector")
+        ("RAG", "RAG-conv-histry", "DB-QnA", "DB-QnA-agent", "DB-QnA-vector", "Text-to-SQL")
     )
 
     # Model selection dropdown
@@ -69,6 +69,8 @@ def main():
                 response = process_db_agent(prompt, model_choice)
             elif app_type == 'DB-QnA-vector':
                 response =  process_db_vector(prompt, model_choice)
+            elif app_type == 'Text-to-SQL':
+                response = process_text_to_sql(prompt)
             else:
                 response = process_query(prompt, model_choice)
             
